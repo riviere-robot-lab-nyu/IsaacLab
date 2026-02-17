@@ -81,3 +81,5 @@ tests/
 # Except this specific file
 !/assets/scenes/
 !/assets/scenes/Lab_rendering.usd
+
+/${data}

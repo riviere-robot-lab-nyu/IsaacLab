@@ -41,14 +41,15 @@ class M3CabinetEnvCfg(DirectRLEnvCfg):
     """Configuration for the RRL M3 environment."""
     # Environment settings
     decimation: int = 2  # Control frequency = sim_dt * decimation
-    episode_length_s: float = 8.3333  # 500 timesteps
+    episode_length_s: float = 15  # was 8.33 500 timesteps 
     # 8 thrusters + 6 dof arm + 1 gripper = 15
     action_space: int = 15
     # Observation space: position(3) + orientation(4) + linear_vel(3) + angular_vel(3) = 13 + 6 joint pos + 6 joint vel = 25
-    observation_space: int = 13
+    observation_space: int = 23 + 6 + 7
     # No state space for asymmetric actor-critic
     state_space = 0
     debug_vis = True  
+    debug_env = False
 
     # Simulation settings
     sim: SimulationCfg = SimulationCfg(
@@ -57,6 +58,8 @@ class M3CabinetEnvCfg(DirectRLEnvCfg):
         gravity=(0.0, 0.0, -9.81),  # Normal gravity
         physx=PhysxCfg(
             solver_type=1,  # TGS solver
+            gpu_max_rigid_patch_count = 24 * 2**15,     # ~786432, well above 376832
+            gpu_max_rigid_contact_count = 2**24,        # double the default
             enable_stabilization=True,
             enable_external_forces_every_iteration=True,  # for thusters to work properly
             min_velocity_iteration_count=1,  # stable velocity 
@@ -80,9 +83,8 @@ class M3CabinetEnvCfg(DirectRLEnvCfg):
 
     # scene
     scene: InteractiveSceneCfg = InteractiveSceneCfg(
-        num_envs=4096, env_spacing=3.0, 
+        num_envs=8192, env_spacing=3.0, 
     )
-
 
     # robot 
     robot: ArticulationCfg = RRLM3_CFG.replace(
@@ -90,6 +92,14 @@ class M3CabinetEnvCfg(DirectRLEnvCfg):
     init_state=RRLM3_CFG.init_state.replace(
         pos=(1.0, 0.0, 0.01),
         rot = (0.0, 0.0, 0.0, 1.0),  # 180 degrees rotation around Z-axis to face the cabinet
+        joint_pos={
+            "joint_0": 0.0,
+            "joint_1": 0.39,
+            "joint_2": 0.39,
+            "joint_3": 0.0,
+            "joint_4": 0.0,
+            "joint_5": 0.0,
+        },
     ),
     ) # type: ignore
 
@@ -129,10 +139,16 @@ class M3CabinetEnvCfg(DirectRLEnvCfg):
     # Thruster configuration
     thrusters: ThrusterLayoutCfg = ThrusterLayoutCfg()
     
+
+    action_scale = 1.0
+    arm_speed_scale = 0.5
+    dof_velocity_scale = 0.5
     # Reward scales
-    lin_vel_reward_scale: float = -0.05
-    ang_vel_reward_scale: float = -0.01
-    distance_to_goal_reward_scale: float = 15.0
+    dist_reward_scale = 1.5
+    rot_reward_scale = 1.5
+    open_reward_scale = 10.0
+    action_penalty_scale = 0.05
+    finger_reward_scale = 2.0
     # reward_action_penalty: float = -0.001  # Small penalty for using thrusters
 
 
