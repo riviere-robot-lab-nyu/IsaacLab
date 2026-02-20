@@ -63,14 +63,18 @@ def main():
         # run everything in inference mode
         with torch.inference_mode():
             # Arm wave movement for testing gains 
-            actions[:, 2:4] = torch.ones(env.action_space.shape[0], 2, device=env.unwrapped.device)
+            # actions[:, 2:4] = torch.ones(env.action_space.shape[0], 2, device=env.unwrapped.device)
             # actions[:, 8:] = 1.0 * torch.sin(2 * torch.pi * torch.ones((env.action_space.shape[0], 7), device=env.unwrapped.device) * 0.5 * sim_time) # type: ignore
-            # signal = torch.zeros(env.action_space.shape[0], 7, device=env.unwrapped.device)
-            # signal[:, -1] = 1
-            # actions[:, 8:] = 0.004 * torch.sin(2 * torch.pi * signal * 0.5 * sim_time) # type: ignore
+
+            ########## testing gripper open/close with sine wave ##########
+            signal = torch.zeros(env.action_space.shape[0], 7, device=env.unwrapped.device)
+            signal[:, -1] = 1
+            actions[:, 8:] = 0.004 * torch.sin(2 * torch.pi * signal * 0.5 * sim_time) # type: ignore
             # gripper_cmd = actions[:, -1]  # single scalar per env
             # close_mask = (gripper_cmd > 0.0).unsqueeze(-1)  # (num_envs, 1)
             # gripper_targets = torch.where(close_mask, 0, 0.04)
+            ###################################################################
+            
             # apply actions
             obs, rews, _, _, _ = env.step(actions)
             current_step += 1

@@ -21,12 +21,12 @@ simulation_app = app_launcher.app
 import isaaclab.sim as sim_utils
 from isaaclab.sim import SimulationContext
 from isaaclab.utils import configclass
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 
 
+# USD_PATH = "/home/cpw/workspace/IsaacLab/assets/scenes/Lab_rendering.usd"
 
-USD_PATH = "/home/cpw/workspace/IsaacLab/assets/scenes/Lab_rendering.usd"
-
-
+USD_PATH = f"{ISAAC_NUCLEUS_DIR}/People/Characters/female_adult_police_02/female_adult_police_02.usd"
 
 def main():
     # Create simulation context

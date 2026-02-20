@@ -31,7 +31,6 @@ FRAME_MARKER_SMALL_CFG = FRAME_MARKER_CFG.copy() # type: ignore
 FRAME_MARKER_SMALL_CFG.markers["frame"].scale = (0.250, 0.250, 0.250)
 
 
-
 ##
 # Environment Configuration
 ##
@@ -99,6 +98,8 @@ class M3CabinetEnvCfg(DirectRLEnvCfg):
             "joint_3": 0.0,
             "joint_4": 0.0,
             "joint_5": 0.0,
+
+            "left_carriage_joint": 0.04,
         },
     ),
     ) # type: ignore
@@ -136,6 +137,7 @@ class M3CabinetEnvCfg(DirectRLEnvCfg):
         },
     )
 
+
     # Thruster configuration
     thrusters: ThrusterLayoutCfg = ThrusterLayoutCfg()
     
@@ -149,7 +151,7 @@ class M3CabinetEnvCfg(DirectRLEnvCfg):
     open_reward_scale = 10.0
     action_penalty_scale = 0.05
     finger_reward_scale = 2.0
-    # reward_action_penalty: float = -0.001  # Small penalty for using thrusters
+    grasp_reward_scale = 5.0
 
 
 

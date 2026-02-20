@@ -12,10 +12,11 @@ from typing import Dict, Tuple
 import isaaclab.sim as sim_utils
 from isaaclab.envs import DirectRLEnv
 from isaaclab.markers import VisualizationMarkers
-from isaaclab.assets import Articulation
+from isaaclab.assets import Articulation, RigidObject
 from isaaclab.sensors import TiledCamera, TiledCameraCfg
 from isaaclab.utils.math import quat_apply, subtract_frame_transforms, sample_uniform
 from isaaclab.sim.utils.stage import get_current_stage
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 ##
 # Pre-defined configs
 ##
@@ -113,7 +114,7 @@ class M3CabinetEnv(DirectRLEnv):
         self.drawer_inward_axis = torch.tensor([-1, 0, 0], device=self.device, dtype=torch.float32).repeat(
             (self.num_envs, 1)
         )
-        self.gripper_up_axis = torch.tensor([0, 0, 1], device=self.device, dtype=torch.float32).repeat(
+        self.gripper_up_axis = torch.tensor([0, 1, 0], device=self.device, dtype=torch.float32).repeat(
             (self.num_envs, 1)
         )
         self.drawer_up_axis = torch.tensor([0, 0, 1], device=self.device, dtype=torch.float32).repeat(
@@ -219,10 +220,8 @@ class M3CabinetEnv(DirectRLEnv):
         # Binary Gripper command
         close_mask = (actions[:, -1] < 0.0).unsqueeze(-1)  # (num_envs, 1)
         gripper_targets = torch.where(close_mask, 0, 0.04) # 0.04 is the open position, 0 is the closed position
-        self.robot_dof_targets[:, -2] = gripper_targets.squeeze(-1)  
         # 8 joint targets for the arm, but ignore the last gripper joint (mimic joint)
-        # self.robot_dof_targets[:, :-1] = self._actions[:, 8:]
-
+        self.robot_dof_targets[:, -2] = gripper_targets.squeeze(-1)  
     
     def _apply_action(self):
         """Apply the computed forces and torques to the robot."""
@@ -281,6 +280,7 @@ class M3CabinetEnv(DirectRLEnv):
         robot_left_finger_pos = self.robot.data.body_pos_w[:, self.left_finger_link_idx]
         robot_right_finger_pos = self.robot.data.body_pos_w[:, self.right_finger_link_idx]
 
+        # TODO: should not pass reward scales
         return self._compute_rewards(
             self.actions,
             self.cabinet.data.joint_pos,
@@ -485,12 +485,27 @@ class M3CabinetEnv(DirectRLEnv):
         finger_dist_penalty += torch.where(lfinger_dist < 0, lfinger_dist, torch.zeros_like(lfinger_dist))
         finger_dist_penalty += torch.where(rfinger_dist < 0, rfinger_dist, torch.zeros_like(rfinger_dist))
 
+        ### grasp reward ###
+        # Fingers are on correct sides of handle
+        fingers_around = (lfinger_dist > 0) & (rfinger_dist > 0)
+
+        # Gripper is closing on the handle
+        gripper_closed = joint_positions[:, -2] < 0.01
+
+        # Full grasp: near handle + fingers around it + closed
+        grasp_reward = torch.where(
+            fingers_around & gripper_closed & (d < 0.05),
+            torch.ones_like(d),
+            torch.zeros_like(d),
+        )
+
         rewards = (
             dist_reward_scale * dist_reward
             + rot_reward_scale * rot_reward
             + open_reward_scale * open_reward
             + finger_reward_scale * finger_dist_penalty
             - action_penalty_scale * action_penalty
+            + self.cfg.grasp_reward_scale * grasp_reward
         )
 
         self.extras["log"] = {
@@ -501,6 +516,7 @@ class M3CabinetEnv(DirectRLEnv):
             "left_finger_distance_reward": (finger_reward_scale * lfinger_dist).mean(),
             "right_finger_distance_reward": (finger_reward_scale * rfinger_dist).mean(),
             "finger_dist_penalty": (finger_reward_scale * finger_dist_penalty).mean(),
+            "grasp_reward": (self.cfg.grasp_reward_scale * grasp_reward).mean(),
         }
 
         # bonus for opening drawer properly
