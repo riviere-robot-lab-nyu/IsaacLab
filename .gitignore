@@ -83,3 +83,5 @@ tests/
 !/assets/scenes/Lab_rendering.usd
 
 /${data}
+
+/images
