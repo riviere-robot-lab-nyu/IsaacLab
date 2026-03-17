@@ -190,42 +190,55 @@ class M3CabinetCameraEnv(DirectRLEnv):
         """Process actions to compute thruster forces and torques."""
         self._actions = actions.clone()
         
-        # Map actions from [-1, 1] to [0, max_thrust]
-        thrust_magnitudes = (self._actions[:, :8].clamp(-1.0, 1.0) + 1.0) * 0.5 * self._max_thrust  # (num_envs, 8)
-        
-        # Compute forces in body frame
-        forces_body = thrust_magnitudes.unsqueeze(-1) * self._thruster_directions.unsqueeze(0) # (num_envs, 8, 3)
-        
-        # Sum all thruster forces to get total force
-        total_force_body = forces_body.sum(dim=1)  # (num_envs, 3)
-        
-        # Compute torques: torque = position × force
-        torques_body = torch.cross(
-            self._thruster_positions.unsqueeze(0).expand(self.num_envs, -1, -1),
-            forces_body,
-            dim=-1
-        )
-        total_torque_body = torques_body.sum(dim=1)  # (num_envs, 3)
-                
-        # Apply external forces and torques
-        self._applied_forces = total_force_body
-        self._applied_torques = total_torque_body
+        if not self.cfg.replay_episode:
+            # Map actions from [-1, 1] to [0, max_thrust]
+            thrust_magnitudes = (self._actions[:, :8].clamp(-1.0, 1.0) + 1.0) * 0.5 * self._max_thrust  # (num_envs, 8)
+            
+            # Compute forces in body frame
+            forces_body = thrust_magnitudes.unsqueeze(-1) * self._thruster_directions.unsqueeze(0) # (num_envs, 8, 3)
+            
+            # Sum all thruster forces to get total force
+            total_force_body = forces_body.sum(dim=1)  # (num_envs, 3)
+            
+            # Compute torques: torque = position × force
+            torques_body = torch.cross(
+                self._thruster_positions.unsqueeze(0).expand(self.num_envs, -1, -1),
+                forces_body,
+                dim=-1
+            )
+            total_torque_body = torques_body.sum(dim=1)  # (num_envs, 3)
+                    
+            # Apply external forces and torques
+            self._applied_forces = total_force_body
+            self._applied_torques = total_torque_body
 
 
-        arm_targets = (
-            self.robot_dof_targets[:, :-2]  # previous targets for arm joints
-            + self.cfg.arm_speed_scale * self.dt * self._actions[:, 8:-1] * self.cfg.action_scale
-        )
+            arm_targets = (
+                self.robot_dof_targets[:, :-2]  # previous targets for arm joints
+                + self.cfg.arm_speed_scale * self.dt * self._actions[:, 8:-1] * self.cfg.action_scale
+            )
 
-        # Clamp the joint targets to be within limits
-        self.robot_dof_targets[:, :-2] = torch.clamp(
-            arm_targets,
-            self.robot_dof_lower_limits[:-2],
-            self.robot_dof_upper_limits[:-2],
-        )
+            # Clamp the joint targets to be within limits
+            self.robot_dof_targets[:, :-2] = torch.clamp(
+                arm_targets,
+                self.robot_dof_lower_limits[:-2],
+                self.robot_dof_upper_limits[:-2],
+            )
+        else:
+            # wrench
+            self._applied_forces = torch.zeros(actions.shape[0], 3, device=actions.device)
+            self._applied_torques = torch.zeros(actions.shape[0], 3, device=actions.device)
+            self._applied_forces[:, :2] = actions[:, :2]  # Fx, Fy
+            self._applied_torques[:, -1] = actions[:, 2]  # Tau_z (yaw torque)
+            # Clamp the joint targets to be within limits
+            self.robot_dof_targets[:, :-2] = torch.clamp(
+                actions[:, 3:-1],  # joint position targets for arm joints
+                self.robot_dof_lower_limits[:-2],
+                self.robot_dof_upper_limits[:-2],
+            )
 
         # Binary Gripper command
-        close_mask = (actions[:, -1] < 0.0).unsqueeze(-1)  # (num_envs, 1)
+        close_mask = (actions[:, -1] < 0.02).unsqueeze(-1)  # (num_envs, 1)
         gripper_targets = torch.where(close_mask, 0, 0.04) # 0.04 is the open position, 0 is the closed position
         # 8 joint targets for the arm, but ignore the last gripper joint (mimic joint)
         self.robot_dof_targets[:, -2] = gripper_targets.squeeze(-1)  
@@ -260,6 +273,7 @@ class M3CabinetCameraEnv(DirectRLEnv):
         # camera_base_data -= base_mean_tensor
         camera_data = torch.cat([camera_wrist_data, camera_base_data], dim=-1) # (num_envs, H, W, 6)
 
+        # for debugging
         if self.cfg.write_image_to_file:
             save_images_to_file(camera_wrist_data.clone(), f"./images/wrist_img_{self._image_save_counter}.png")
             save_images_to_file(camera_base_data.clone(), f"./images/base_img_{self._image_save_counter}.png")
@@ -277,7 +291,7 @@ class M3CabinetCameraEnv(DirectRLEnv):
 
         # TODO: should not pass reward scales
         return self._compute_rewards(
-            self.actions,
+            self._actions,
             self.cabinet.data.joint_pos,
             self.robot_grasp_pos,
             self.drawer_grasp_pos,
@@ -314,11 +328,16 @@ class M3CabinetCameraEnv(DirectRLEnv):
 
         # Robot drifted too far from cabinet
         root_pos_local = self.robot.data.root_pos_w - self.cabinet.data.root_pos_w
-        drifted = torch.norm(root_pos_local[:, :2], dim=-1) > 1.5  # 1.5m from cabinet
-        
-        # Combine termination conditions
-        terminated = tipped | cabinet_done | drifted
-        truncated = time_out & ~terminated
+
+        if not self.cfg.replay_episode:
+            drifted = torch.norm(root_pos_local[:, :2], dim=-1) > 1.5  # 1.5m from cabinet
+            
+            # Combine termination conditions
+            terminated = tipped | cabinet_done | drifted
+            truncated = time_out & ~terminated
+        else:
+            terminated = tipped | cabinet_done
+            truncated = time_out & ~terminated
         
         return terminated, truncated
     
@@ -494,6 +513,8 @@ class M3CabinetCameraEnv(DirectRLEnv):
             torch.zeros_like(d),
         )
 
+        sparse_reward = grasp_reward * torch.where(cabinet_dof_pos[:, 3] > 0.35, torch.ones_like(d), torch.zeros_like(d))
+
         rewards = (
             dist_reward_scale * dist_reward
             + rot_reward_scale * rot_reward
@@ -519,7 +540,7 @@ class M3CabinetCameraEnv(DirectRLEnv):
         rewards = torch.where(cabinet_dof_pos[:, 3] > 0.2, rewards + 0.25, rewards)
         rewards = torch.where(cabinet_dof_pos[:, 3] > 0.35, rewards + 0.25, rewards)
 
-        return rewards
+        return sparse_reward
 
     def _compute_grasp_transforms(
         self,

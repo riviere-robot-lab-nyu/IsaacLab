@@ -91,7 +91,6 @@ class M3VelCabinetCameraEnv(DirectRLEnv):
             device=self.device,
         )   
 
-
         finger_pose = torch.zeros(7, device=self.device)
         finger_pose[0:3] = (lfinger_pose[0:3] + rfinger_pose[0:3]) / 2.0
         finger_pose[3:7] = lfinger_pose[3:7]
@@ -244,24 +243,20 @@ class M3VelCabinetCameraEnv(DirectRLEnv):
     def _get_observations(self) -> dict:
         camera_wrist_data = self._tiled_camera_wrist.data.output["rgb"] / 255.0
         camera_base_data = self._tiled_camera_base.data.output["rgb"] / 255.0
-        # Normalize the camera data for better training result (this is for visual RL)
-        # wrist_mean_tensor = torch.mean(camera_wrist_data, dim=(1, 2), keepdim=True)
-        # base_mean_tensor = torch.mean(camera_base_data, dim=(1, 2), keepdim=True)
-        # camera_wrist_data -= wrist_mean_tensor
-        # camera_base_data -= base_mean_tensor
+        if not self.cfg.replay_episode: 
+            # Normalize the camera data for better training result (this is for visual RL)
+            wrist_mean_tensor = torch.mean(camera_wrist_data, dim=(1, 2), keepdim=True)
+            base_mean_tensor = torch.mean(camera_base_data, dim=(1, 2), keepdim=True)
+            camera_wrist_data -= wrist_mean_tensor
+            camera_base_data -= base_mean_tensor
 
-        # TODO: UNCOMMENT WHEN RECORDING
-    #    camera_data = torch.cat([camera_wrist_data, camera_base_data], dim=-1) # (num_envs, H, W, 6)
+            camera_data = torch.cat([camera_wrist_data, camera_base_data], dim=-1) # (num_envs, H, W, 6)
 
-    #    if self.cfg.write_image_to_file:
-    #        save_images_to_file(camera_wrist_data.clone(), f"./images/wrist_img_{self._image_save_counter}.png")
-    #        save_images_to_file(camera_base_data.clone(), f"./images/base_img_{self._image_save_counter}.png")
-    #        print(f"[INFO]: Saved wrist and base camera images for step {self._image_save_counter}")
-    #        self._image_save_counter += 1
 
-    #    self._last_obs = {"policy": camera_data.clone()}
-    #    return self._last_obs
-        return {}
+            self._last_obs = {"policy": camera_data.clone()}
+            return self._last_obs
+        else:
+            return {}
     
     def _get_rewards(self) -> torch.Tensor:
         # Refresh the intermediate values after the physics steps
@@ -271,7 +266,7 @@ class M3VelCabinetCameraEnv(DirectRLEnv):
 
         # TODO: should not pass reward scales
         return self._compute_rewards(
-            self.actions,
+            self._actions,
             self.cabinet.data.joint_pos,
             self.robot_grasp_pos,
             self.drawer_grasp_pos,
@@ -308,11 +303,16 @@ class M3VelCabinetCameraEnv(DirectRLEnv):
 
         # Robot drifted too far from cabinet
         root_pos_local = self.robot.data.root_pos_w - self.cabinet.data.root_pos_w
-        drifted = torch.norm(root_pos_local[:, :2], dim=-1) > 1.5*100  # 1.5m from cabinet
-        
-        # Combine termination conditions
-        terminated = tipped | cabinet_done | drifted
-        truncated = time_out & ~terminated
+
+        if not self.cfg.replay_episode:
+            drifted = torch.norm(root_pos_local[:, :2], dim=-1) > 1.5  # 1.5m from cabinet
+            
+            # Combine termination conditions
+            terminated = tipped | cabinet_done | drifted
+            truncated = time_out & ~terminated
+        else:
+            terminated = tipped | cabinet_done
+            truncated = time_out & ~terminated
         
         return terminated, truncated
     

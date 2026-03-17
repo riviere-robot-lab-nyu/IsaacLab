@@ -46,6 +46,7 @@ class M3VelCabinetCameraEnvCfg(DirectRLEnvCfg):
     debug_vis = False  
     write_image_to_file = False
     debug_env = False
+    replay_episode = True
 
     # Simulation settings
     sim: SimulationCfg = SimulationCfg(

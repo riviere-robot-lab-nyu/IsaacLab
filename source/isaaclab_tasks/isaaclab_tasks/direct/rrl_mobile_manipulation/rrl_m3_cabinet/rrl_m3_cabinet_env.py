@@ -218,7 +218,7 @@ class M3CabinetEnv(DirectRLEnv):
         )
 
         # Binary Gripper command
-        close_mask = (actions[:, -1] < 0.0).unsqueeze(-1)  # (num_envs, 1)
+        close_mask = (actions[:, -1] < 0.02).unsqueeze(-1)  # (num_envs, 1)
         gripper_targets = torch.where(close_mask, 0, 0.04) # 0.04 is the open position, 0 is the closed position
         # 8 joint targets for the arm, but ignore the last gripper joint (mimic joint)
         self.robot_dof_targets[:, -2] = gripper_targets.squeeze(-1)  
@@ -282,7 +282,7 @@ class M3CabinetEnv(DirectRLEnv):
 
         # TODO: should not pass reward scales
         return self._compute_rewards(
-            self.actions,
+            self._actions,
             self.cabinet.data.joint_pos,
             self.robot_grasp_pos,
             self.drawer_grasp_pos,
