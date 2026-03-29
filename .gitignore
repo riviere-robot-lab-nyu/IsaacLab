@@ -88,3 +88,4 @@ tests/
 /images_vel
 
 source/isaaclab_tasks/isaaclab_tasks/direct/rrl_mobile_manipulation/rrl_m3_experimental_env
+scripts/environments/test/depreacated

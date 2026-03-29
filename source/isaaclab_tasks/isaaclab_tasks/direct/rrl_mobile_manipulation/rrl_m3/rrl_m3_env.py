@@ -36,7 +36,6 @@ class M3Env(DirectRLEnv):
         super().__init__(cfg, render_mode, **kwargs)
         
         # Initialization
-        self._setup_thrusters()
         self._actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
         
 
@@ -70,29 +69,20 @@ class M3Env(DirectRLEnv):
         # add handle for debug visualization (this is set to a valid handle inside set_debug_vis)
         self.set_debug_vis(self.cfg.debug_vis)
 
-    
+        # Add thruster stuff for velocity control
+        kp = 100
+        kp_orient = 0.5 * kp
+        self.kps = torch.tensor([[kp, kp, kp_orient]], device=self.device)
+        U_MAX = 1.7
+        D_MOMENT = 0.12
+        D = U_MAX * torch.tensor([[1.0, 1.0, 0.0, 0.0],
+                                  [0.0, 0.0, 1.0, 1.0],
+                                  [D_MOMENT, -D_MOMENT, D_MOMENT, -D_MOMENT]], device=self.device)
+        self.D_T = D.T
+        self.D_inv_T = torch.linalg.pinv(D).T
 
-    def _setup_thrusters(self):
-        thruster_names = self.cfg.thrusters.thruster_names
-        
-        # Positions: (8, 3)
-        positions = []
-        directions = []
-        for name in thruster_names:
-            positions.append(self.cfg.thrusters.positions[name])
-            directions.append(self.cfg.thrusters.directions[name])
-        
-        self._thruster_positions = torch.tensor(
-            positions, dtype=torch.float32, device=self.device
-        )  # (8, 3)
-        
-        self._thruster_directions = torch.tensor(
-            directions, dtype=torch.float32, device=self.device
-        )  # (8, 3)
-        
-        self._max_thrust = self.cfg.thrusters.max_thrust
-        self._num_thrusters = len(thruster_names)
-
+        self._applied_forces = torch.zeros((self.num_envs, 3), device=self.device)
+        self._applied_torques = torch.zeros((self.num_envs, 3), device=self.device)
     
     def _setup_scene(self):
         """Set up the scene with robot and ground."""
@@ -115,28 +105,13 @@ class M3Env(DirectRLEnv):
         """Process actions to compute thruster forces and torques."""
         self._actions = actions.clone()
         
-        # Map actions from [-1, 1] to [0, max_thrust]
-        thrust_magnitudes = (self._actions[:, :8] + 1.0) * 0.5 * self._max_thrust  # (num_envs, 8)
-        
-        # Compute forces in body frame
-        forces_body = thrust_magnitudes.unsqueeze(-1) * self._thruster_directions.unsqueeze(0) # (num_envs, 8, 3)
-        
-        # Sum all thruster forces to get total force
-        total_force_body = forces_body.sum(dim=1)  # (num_envs, 3)
-        
-        # Compute torques: torque = position × force
-        torques_body = torch.cross(
-            self._thruster_positions.unsqueeze(0).expand(self.num_envs, -1, -1),
-            forces_body,
-            dim=-1
-        )
-        total_torque_body = torques_body.sum(dim=1)  # (num_envs, 3)
-                
-        
-        # Apply external forces and torques
-        self._applied_forces = total_force_body
-        self._applied_torques = total_torque_body
-        self.robot_dof_targets[:, :-1] = self._actions[:, 8:]  
+        thrust = torch.clip(self._actions[:, :4], -1. ,1.)
+        wrench = thrust @ self.D_T
+
+        self._applied_forces[:, :2] = wrench[:, :2]
+        self._applied_torques[:, 2] = wrench[:, -1]
+
+        self.robot_dof_targets[:, :-1] = self._actions[:, 4:]  
         
     
     def _apply_action(self):
@@ -304,6 +279,10 @@ class M3Env(DirectRLEnv):
                 self.robot_frame_visualizer.set_visibility(False)
 
     def _debug_vis_callback(self, event):
+        try:
+            robot_pos = self.robot.data.root_pos_w.clone()
+        except ReferenceError:
+            return
         # Goal sphere
         self.goal_pos_visualizer.visualize(self._desired_pos_w)
         # Goal frame (orientation)

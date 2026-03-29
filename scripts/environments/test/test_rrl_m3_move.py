@@ -45,6 +45,7 @@ def main():
 
     # create environment
     env = gym.make("RRL-M3-Direct-v0", cfg=env_cfg)
+    print(env.unwrapped.robot.joint_names)
     # reset environment at start
     env.reset()
 
@@ -61,10 +62,10 @@ def main():
         # run everything in inference mode
         with torch.inference_mode():
             # Arm wave movement for testing gains 
-            actions[:, 8:] = 1.0 * torch.sin(2 * torch.pi * torch.ones((env.action_space.shape[0], 7), device=env.unwrapped.device) * 0.5 * sim_time) # type: ignore
-            # if current_step <= max_action_steps:
+            # actions[:, 8:] = 1.0 * torch.sin(2 * torch.pi * torch.ones((env.action_space.shape[0], 7), device=env.unwrapped.device) * 0.5 * sim_time) # type: ignore
+            if current_step <= max_action_steps:
                 # actions: [-1, 1]
-                # actions[:, :2] = torch.ones(env.action_space.shape[0], 2, device=env.unwrapped.device) 
+                actions[:, :2] = torch.ones(env.action_space.shape[0], 2, device=env.unwrapped.device) 
             # apply actions
             obs, rews, _, _, _ = env.step(actions)
             current_step += 1
@@ -72,7 +73,6 @@ def main():
             print(f"[INFO]: Step: {current_step}, actions: {actions.cpu().numpy()}")
     # close the simulator
     env.close()
-
 
 if __name__ == "__main__":
     # run the main function

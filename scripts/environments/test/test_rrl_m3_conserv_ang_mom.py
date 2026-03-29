@@ -60,9 +60,9 @@ def main():
         with torch.inference_mode():
             # compute zero actions
             if (current_step // 120) % 2 == 0: # every 60 steps, switch thruster direction
-                actions[:, 8] = torch.ones(env.action_space.shape[0], device=env.unwrapped.device)
+                actions[:, 4] = torch.ones(env.action_space.shape[0], device=env.unwrapped.device)
             else:
-                actions[:, 8] = -torch.ones(env.action_space.shape[0], device=env.unwrapped.device)
+                actions[:, 4] = -torch.ones(env.action_space.shape[0], device=env.unwrapped.device)
             # apply actions
             obs, rews, _, _, _ = env.step(actions)
             current_step += 1

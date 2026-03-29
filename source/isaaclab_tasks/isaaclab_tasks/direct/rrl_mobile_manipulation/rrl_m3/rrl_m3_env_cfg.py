@@ -40,14 +40,15 @@ class M3EnvCfg(DirectRLEnvCfg):
     """Configuration for the RRL M3 environment."""
     # Environment settings
     decimation: int = 2  # Control frequency = sim_dt * decimation
-    episode_length_s: float = 4.0  # 4 seconds per episode
-    # 8 thrusters + 6 dof arm + 2 gripper = 16
-    action_space: int = 15
+    episode_length_s: float = 15.0  # 15 seconds per episode
+    # 4 thrusters + 6 dof arm + 2 gripper = 16
+    action_space: int = 11
     # Observation space: position(3) + orientation(4) + linear_vel(3) + angular_vel(3) = 13 + 6 joint pos + 6 joint vel = 25
     observation_space: int = 13
     # No state space for asymmetric actor-critic
     state_space = 0
     debug_vis = True  
+    terminations = None
 
     # Simulation settings
     sim: SimulationCfg = SimulationCfg(
@@ -83,7 +84,12 @@ class M3EnvCfg(DirectRLEnvCfg):
     )
 
     # robot 
-    robot: ArticulationCfg = RRLM3_CFG.replace(prim_path="/World/envs/env_.*/Robot") # type: ignore
+    robot: ArticulationCfg = RRLM3_CFG.replace(prim_path="/World/envs/env_.*/Robot",
+                                               init_state=RRLM3_CFG.init_state.replace(
+        pos=(1.0, 0.0, 0.01),
+        rot = (1.0, 0.0, 0.0, 0.0),
+        )
+    )  # 180 degrees rotation around Z-axis to face the cabinet) # type: ignore
 
     # Thruster configuration
     thrusters: ThrusterLayoutCfg = ThrusterLayoutCfg()
