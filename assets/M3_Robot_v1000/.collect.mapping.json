@@ -1,0 +1,29 @@
+{
+    "version": "1.0",
+    "file_records": [
+        {
+            "source_url": "/home/sam/bs/IsaacLab/Collected_M3_robot/home/sam/Downloads/textures/alpha3_v4_part_glb_texture0.png",
+            "source_hash": "a1a2576e20f51bdf5d4b856cc90c7325cb310504",
+            "target_url": "./SubUSDs/textures/alpha3_v4_part_glb_texture0.png",
+            "target_hash": "edbe0beef50a669b02aa584d71800ec9dd1c765e"
+        },
+        {
+            "source_url": "/home/sam/bs/IsaacLab/Collected_M3_robot/home/sam/Downloads/textures/alpha3_v4_part_glb_texture1.png",
+            "source_hash": "fd38dbe0104995b1ede6c1a5b76cbe61e427361d",
+            "target_url": "./SubUSDs/textures/alpha3_v4_part_glb_texture1.png",
+            "target_hash": "f80cb31cfb9bb3c5d91480133b96794b39f26520"
+        },
+        {
+            "source_url": "/home/sam/bs/IsaacLab/Collected_M3_robot/home/sam/Downloads/textures/alpha3_v4_part_glb_texture2.png",
+            "source_hash": "fd38dbe0104995b1ede6c1a5b76cbe61e427361d",
+            "target_url": "./SubUSDs/textures/alpha3_v4_part_glb_texture2.png",
+            "target_hash": "524f6f08aec348ce7814aa2f29fe3134fdb8924f"
+        },
+        {
+            "source_url": "/home/sam/bs/IsaacLab/Collected_M3_robot/home/sam/Downloads/textures/alpha3_v4_part_glb_texture3.png",
+            "source_hash": "0e39338c62fb59d32d1106c103b2ac8b69d8a646",
+            "target_url": "./SubUSDs/textures/alpha3_v4_part_glb_texture3.png",
+            "target_hash": "897a925c180adfb478ac05406d889943d3be6cc2"
+        }
+    ]
+}
